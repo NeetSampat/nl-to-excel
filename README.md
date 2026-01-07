@@ -1,73 +1,42 @@
-##NL2Excel – Natural Language to Excel Formula Generation
+Natural Language to Excel Formula Generation (NL2Excel)
+Overview
 
-NL2Excel is a task-specific AI application that converts natural language instructions into valid Excel formulas using a fine-tuned FLAN-T5 transformer model.
-The generated formulas are applied and evaluated in real time within an Excel-like web interface.
+This project enables users to convert natural language instructions into valid Excel formulas using a fine-tuned transformer model and applies them in real time within an Excel-like interface.
 
-This project is developed as a Final Year Engineering Project and runs fully locally without external AI APIs.
+Tech Stack
 
-##Features
+Python
 
-Convert plain English instructions into Excel formulas
+FLAN-T5 (HuggingFace Transformers)
 
-Supports common Excel operations:
+FastAPI
 
-SUM, COUNT, AVERAGE
+Node.js
 
-SUMIF, COUNTIF, SUMIFS
+Handsontable
 
-Conditional logic (IF, logical expressions)
+HyperFormula
 
-Real-time formula evaluation
+Workflow
 
-Upload and download Excel files
+User uploads an Excel or CSV file
 
-Works offline (no dependency on ChatGPT or cloud APIs)
+User selects a target cell, column, or range
 
-##Model Details
+Natural language instruction is entered
 
-Base Model: FLAN-T5-small
+Transformer model generates an Excel formula
 
-Training Type: Supervised fine-tuning (sequence-to-sequence)
+Formula is applied and evaluated instantly
 
-Dataset Size: 25,000+ Natural Language → Excel formula pairs
+Updated Excel file can be downloaded
 
-Training Epochs: 6
+Key Learnings
 
-Output: Valid Excel-compatible formula strings
+Transformer-based NLP model fine-tuning
 
-##System Architecture
+Sequence-to-sequence learning
 
-Model Layer: Fine-tuned FLAN-T5 transformer for formula generation
+Backend API development for model inference
 
-Backend: FastAPI for model inference
-
-Adapter Layer: Node.js bridge for frontend communication
-
-##Workflow
-
-1.User uploads an Excel file
-
-2.Selects a target cell, column, or range
-
-3.Enters a natural language instruction
-
-4.Model generates the corresponding Excel formula
-
-5.Formula is applied and evaluated instantly
-
-6.User downloads the updated Excel file
-
-##Tech Stack
-
-AI / NLP: Python, HuggingFace, FLAN-T5
-
-Backend: FastAPI
-
-Frontend: HTML, JavaScript, Handsontable
-
-Excel Processing: HyperFormula, SheetJS
-
-Server Adapter: Node.js
-Frontend: Excel-like interface using Handsontable and HyperFormula
-
-Execution Engine: HyperFormula for real-time Excel evaluation
+Real-time spreadsheet formula execution
