@@ -1,11 +1,11 @@
-NL2Excel – Natural Language to Excel Formula Generation
+##NL2Excel – Natural Language to Excel Formula Generation
 
 NL2Excel is a task-specific AI application that converts natural language instructions into valid Excel formulas using a fine-tuned FLAN-T5 transformer model.
 The generated formulas are applied and evaluated in real time within an Excel-like web interface.
 
 This project is developed as a Final Year Engineering Project and runs fully locally without external AI APIs.
 
- Features
+##Features
 
 Convert plain English instructions into Excel formulas
 
@@ -23,7 +23,7 @@ Upload and download Excel files
 
 Works offline (no dependency on ChatGPT or cloud APIs)
 
- Model Details
+##Model Details
 
 Base Model: FLAN-T5-small
 
@@ -35,7 +35,7 @@ Training Epochs: 6
 
 Output: Valid Excel-compatible formula strings
 
-System Architecture
+##System Architecture
 
 Model Layer: Fine-tuned FLAN-T5 transformer for formula generation
 
@@ -43,21 +43,21 @@ Backend: FastAPI for model inference
 
 Adapter Layer: Node.js bridge for frontend communication
 
-Workflow
+##Workflow
 
-User uploads an Excel file
+1.User uploads an Excel file
 
-Selects a target cell, column, or range
+2.Selects a target cell, column, or range
 
-Enters a natural language instruction
+3.Enters a natural language instruction
 
-Model generates the corresponding Excel formula
+4.Model generates the corresponding Excel formula
 
-Formula is applied and evaluated instantly
+5.Formula is applied and evaluated instantly
 
-User downloads the updated Excel file
+6.User downloads the updated Excel file
 
- Tech Stack
+##Tech Stack
 
 AI / NLP: Python, HuggingFace, FLAN-T5
 
