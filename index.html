@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>NL2Excel — Eval + Formula demo</title>
+
+    <!-- Tailwind-in-browser -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+    <!-- SheetJS -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <!-- Handsontable + HyperFormula -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/handsontable@14.3.0/dist/handsontable.full.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/handsontable@14.3.0/dist/handsontable.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hyperformula@1.6.0/dist/hyperformula.full.min.js"></script>
+
+    <style>
+      /* Small tweak so table header stays visible and grid scrolls nicely */
+      thead th {
+        background: rgba(15, 23, 42, 0.95);
+      }
+
+      /* give table a minimum cell height so rows aren't tiny */
+      td,
+      th {
+        vertical-align: middle;
+      }
+
+      .sheet-fade {
+        animation: fadeIn 0.18s ease-out;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(3px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Dark theme for Handsontable */
+      .dark-hot .handsontable td {
+        background: #020617 !important;
+        color: #e5e7eb !important;
+        border-color: #1f2937 !important;
+      }
+
+      .dark-hot .handsontable th {
+        background: #020617 !important;
+        color: #e5e7eb !important;
+        border-color: #1f2937 !important;
+      }
+
+      .dark-hot .handsontable .ht__highlight,
+      .dark-hot .handsontable .area {
+        background: rgba(16, 185, 129, 0.12) !important;
+      }
+
+      .dark-hot .handsontable .current {
+        border: 2px solid #22c55e !important;
+      }
+    </style>
+  </head>
+
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <div class="min-h-screen flex flex-col">
+      <header
+        class="border-b border-slate-800 bg-slate-950/80 sticky top-0 z-20"
+      >
+        <div
+          class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4"
+        >
+          <div class="flex items-center gap-2">
+            <div
+              class="h-8 w-8 rounded bg-emerald-500/20 border border-emerald-400/60 flex items-center justify-center text-xs font-semibold tracking-tight"
+            >
+              NL
+            </div>
+            <div>
+              <h1 class="text-lg font-semibold tracking-tight">NL2Excel</h1>
+              <p class="text-xs text-slate-400">
+                Natural language → live Excel formulas (eval in-browser)
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400"></div>
+        </div>
+      </header>
+
+      <main
+        class="flex-1 max-w-6xl mx-auto w-full px-4 py-6 flex flex-col gap-4"
+      >
+        <!-- Controls -->
+        <section
+          class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex flex-col gap-3"
+        >
+          <div
+            class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between"
+          >
+            <div class="flex items-center gap-3">
+              <label
+                class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500 text-slate-950 text-sm font-medium cursor-pointer hover:bg-emerald-400 transition"
+              >
+                <input
+                  id="file-input"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  class="hidden"
+                />
+                <span
+                  class="inline-block h-4 w-4 rounded-full border border-slate-900 bg-emerald-600"
+                ></span>
+                <span>Upload Excel / CSV</span>
+              </label>
+
+              <button
+                id="add-sheet-btn"
+                disabled
+                class="px-3 py-2 rounded-lg border border-slate-700 text-xs sm:text-sm text-slate-300 bg-slate-900/70 disabled:opacity-40 disabled:cursor-not-allowed hover:border-emerald-500/60 hover:text-emerald-200 transition"
+              >
+                + Add New Sheet
+              </button>
+
+              <button
+                id="download-btn"
+                disabled
+                class="px-3 py-2 rounded-lg border border-slate-700 text-xs sm:text-sm text-slate-300 bg-slate-900/70 disabled:opacity-40 disabled:cursor-not-allowed hover:border-emerald-500/60 hover:text-emerald-200 transition"
+              >
+                Download updated file
+              </button>
+              <button
+                id="summary-btn"
+                disabled
+                class="px-3 py-2 rounded-lg border border-slate-700 text-xs sm:text-sm text-slate-300 bg-slate-900/70 disabled:opacity-40 disabled:cursor-not-allowed hover:border-emerald-500/60 hover:text-emerald-200 transition"
+              >
+                <button
+                  onclick="testGeminiFrontend()"
+                  class="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs hover:bg-purple-500"
+                >
+                  Test Gemini API
+                </button>
+
+                View Summary
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-2 text-[11px] text-slate-400">
+              <span
+                id="file-meta"
+                class="px-2 py-1 rounded bg-slate-900/80 border border-slate-800"
+                >No file loaded</span
+              >
+              <span
+                id="sheet-meta"
+                class="px-2 py-1 rounded bg-slate-900/80 border border-slate-800"
+                >Sheet: –</span
+              >
+              <span
+                id="selection-meta"
+                class="px-2 py-1 rounded bg-slate-900/80 border border-emerald-700/70 text-emerald-200"
+                >Active cell: –</span
+              >
+            </div>
+          </div>
+
+          <p class="text-xs text-slate-400">
+            Flow: Upload → Select target → Describe NL intent → Formula applied
+            + evaluated → Download updated workbook.
+          </p>
+        </section>
+
+        <!-- Two-column layout -->
+        <section class="flex flex-col lg:flex-row gap-4 flex-1 min-h-[480px]">
+          <!-- Left: grid + viz -->
+          <div class="flex-1 flex flex-col gap-3 min-h-[360px]">
+            <div id="sheet-tabs" class="flex flex-wrap gap-1 text-[11px]"></div>
+
+            <div class="flex gap-3">
+              <!-- Grid container (bounded) -->
+              <div
+                class="flex-1 bg-slate-900/60 border border-slate-800 rounded-xl p-3"
+              >
+                <div class="text-xs text-slate-300 font-medium mb-2">
+                  Workbook Grid
+                </div>
+                <!-- Grid viewport: fixed max-width & height, scroll inside -->
+                <div
+                  id="grid-viewport"
+                  class="max-h-[520px] w-full max-w-[1100px] overflow-auto border border-slate-800 rounded-lg bg-slate-950/40 p-2 mx-auto"
+                >
+                  <div id="grid-container" class="min-w-[800px]">
+                    <div id="hot" class="dark-hot"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Visualization -->
+              <div
+                class="w-[360px] bg-slate-900/60 border border-slate-800 rounded-xl flex flex-col"
+              >
+                <div
+                  class="px-3 py-2 border-b border-slate-800 bg-slate-900/80 flex flex-col gap-2 text-xs"
+                >
+                  <span class="font-medium text-slate-200">Visualization</span>
+
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      class="viz-btn px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-600"
+                      data-type="auto"
+                    >
+                      Auto
+                    </button>
+                    <button
+                      class="viz-btn px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-600"
+                      data-type="pie"
+                    >
+                      Pie
+                    </button>
+                    <button
+                      class="viz-btn px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-600"
+                      data-type="bar"
+                    >
+                      Bar
+                    </button>
+                    <button
+                      class="viz-btn px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-600"
+                      data-type="line"
+                    >
+                      Line
+                    </button>
+                    <button
+                      class="viz-btn px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-600"
+                      data-type="hist"
+                    >
+                      Histogram
+                    </button>
+                    <button
+                      class="viz-btn px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-600"
+                      data-type="scatter"
+                    >
+                      Scatter
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  class="flex-1 p-3 text-[11px] text-slate-400 flex flex-col gap-2"
+                >
+                  <p class="text-[12px]">
+                    Numeric: bar chart. Categorical: pie / distribution bar.
+                    Select a column or range.
+                  </p>
+                  <div class="flex-1 flex items-center justify-center">
+                    <canvas
+                      id="viz-canvas"
+                      class="w-full h-full max-h-[300px]"
+                    ></canvas>
+                  </div>
+                  <div
+                    id="viz-meta"
+                    class="text-[10px] text-slate-500 h-4"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: NL assistant -->
+          <div
+            class="w-full lg:w-[420px] bg-slate-900/60 border border-slate-800 rounded-xl flex flex-col"
+          >
+            <div
+              class="px-3 py-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs"
+            >
+              <span class="font-medium text-slate-200"
+                >Natural Language Assistant</span
+              >
+            </div>
+
+            <div class="flex-1 p-3 flex flex-col gap-3">
+              <div
+                class="text-[11px] text-slate-400 bg-slate-950/60 border border-slate-800 rounded-lg p-2"
+              >
+                <p class="mb-1 font-medium text-slate-300">Examples</p>
+                <ul class="list-disc list-inside space-y-0.5">
+                  <li>"Sum all sales in column C"</li>
+                  <li>"Average of B2:B50"</li>
+                  <li>"Count non-empty cells in this column"</li>
+                </ul>
+              </div>
+
+              <label
+                class="text-xs font-medium text-slate-300 flex flex-col gap-1"
+              >
+                Target cell
+                <input
+                  id="target-cell-input"
+                  type="text"
+                  placeholder="e.g. B10 (auto-filled when you click a cell)"
+                  class="px-2 py-1.5 rounded border border-slate-700 bg-slate-950/70 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500/70"
+                />
+              </label>
+
+              <label
+                class="text-xs font-medium text-slate-300 flex flex-col gap-1 flex-1"
+              >
+                Describe what you want to do
+                <textarea
+                  id="prompt-input"
+                  rows="4"
+                  placeholder="e.g. Sum all sales for region East in this column"
+                  class="flex-1 min-h-[96px] px-2 py-1.5 rounded border border-slate-700 bg-slate-950/70 text-xs text-slate-100 resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500/70"
+                ></textarea>
+              </label>
+
+              <div class="flex items-center gap-2">
+                <button
+                  id="run-ai-btn"
+                  class="flex-1 px-3 py-2 rounded-lg bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400"
+                >
+                  write formula and apply
+                </button>
+                <button
+                  id="insert-formula-btn"
+                  class="px-3 py-2 rounded-lg border border-slate-700 text-xs text-slate-200 bg-slate-950/80 hover:border-emerald-500/60 hover:text-emerald-200"
+                >
+                  Apply formula
+                </button>
+              </div>
+
+              <div class="text-[11px] space-y-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-slate-400">Generated formula</span>
+                  <button
+                    id="copy-formula-btn"
+                    class="text-[10px] px-2 py-0.5 rounded border border-slate-700 text-slate-300 bg-slate-900/80 hover:border-emerald-500/60 hover:text-emerald-200"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <pre
+                  id="formula-output"
+                  class="whitespace-pre-wrap break-all rounded bg-slate-950/80 border border-slate-800 px-2 py-1.5 text-[11px] text-emerald-300 min-h-[40px] flex items-center"
+                >
+–</pre
+                >
+              </div>
+
+              <div
+                id="status-bar"
+                class="text-[11px] text-slate-400 mt-1 h-4"
+                aria-live="polite"
+              ></div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          class="bg-slate-900/60 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-400"
+        >
+          <div class="font-semibold text-slate-200 mb-1 text-xs">Notes</div>
+          <div>
+            This demo uses Handsontable + HyperFormula for Excel-like formulas
+            (SUM, AVERAGE, COUNT, SUMIF, MIN, MAX, etc.) and SheetJS for
+            import/export.
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      // ---------- Elements ----------
+      const $ = (id) => document.getElementById(id);
+      const fileInput = $("file-input");
+      const addSheetBtn = $("add-sheet-btn");
+      const downloadBtn = $("download-btn");
+      const fileMeta = $("file-meta");
+      const sheetMeta = $("sheet-meta");
+      const selectionMeta = $("selection-meta");
+      const sheetTabs = $("sheet-tabs");
+      const vizCanvas = $("viz-canvas");
+      const vizMeta = $("viz-meta");
+      const targetCellInput = $("target-cell-input");
+      const promptInput = $("prompt-input");
+      const runAiBtn = $("run-ai-btn");
+      const insertFormulaBtn = $("insert-formula-btn");
+      const formulaOutput = $("formula-output");
+      const copyFormulaBtn = $("copy-formula-btn");
+      const statusBar = $("status-bar");
+
+      // ---------- State ----------
+      let selectedVizType = "auto"; // auto, pie, bar, line, hist, scatter
+
+      let workbook = null; // SheetJS workbook
+      let currentSheetName = null;
+      let activeSelection = null; // {type, target}
+      let hot = null; // Handsontable instance
+      let selectionKind = "cell"; // 'cell' | 'colHeader' | 'rowHeader'
+
+      // HyperFormula engine
+      const hfInstance = HyperFormula.buildEmpty();
+
+      // ---------- Utilities ----------
+      function setStatus(msg, type = "info") {
+        statusBar.textContent = msg || "";
+        statusBar.classList.remove(
+          "text-emerald-300",
+          "text-amber-300",
+          "text-rose-300"
+        );
+        if (type === "success") statusBar.classList.add("text-emerald-300");
+        if (type === "warn") statusBar.classList.add("text-amber-300");
+        if (type === "error") statusBar.classList.add("text-rose-300");
+      }
+
+      function colToLabel(colIndex) {
+        let label = "";
+        let n = colIndex + 1;
+        while (n > 0) {
+          const rem = (n - 1) % 26;
+          label = String.fromCharCode(65 + rem) + label;
+          n = Math.floor((n - 1) / 26);
+        }
+        return label;
+      }
+      function toA1(r, c) {
+        return colToLabel(c) + (r + 1);
+      }
+
+      function parseA1(ref) {
+        if (!ref) return null;
+        const t = ref.trim().toUpperCase();
+        const m = t.match(/^([A-Z]+)(\d+)$/);
+        if (!m) return null;
+        const letters = m[1];
+        const row = parseInt(m[2], 10) - 1;
+        let col = 0;
+        for (let i = 0; i < letters.length; i++) {
+          col = col * 26 + (letters.charCodeAt(i) - 64);
+        }
+        return { row, col: col - 1 };
+      }
+
+      function colLabelToIndex(label) {
+        let col = 0;
+        for (let i = 0; i < label.length; i++) {
+          col = col * 26 + (label.charCodeAt(i) - 64);
+        }
+        return col - 1;
+      }
+
+      // parse "A:A" / "A1:B3" / "A" / "A1"
+      function parseRangeSpec(spec) {
+        const s = spec.trim().toUpperCase();
+        if (/^[A-Z]+:[A-Z]+$/.test(s)) {
+          const [a, b] = s.split(":");
+          return {
+            type: "col",
+            startCol: colLabelToIndex(a),
+            endCol: colLabelToIndex(b),
+          };
+        }
+        if (/^[A-Z]+\d+:[A-Z]+\d+$/.test(s)) {
+          const [a, b] = s.split(":");
+          const pa = parseA1(a),
+            pb = parseA1(b);
+          return { type: "range", start: pa, end: pb };
+        }
+        if (/^[A-Z]+$/.test(s)) {
+          return {
+            type: "col",
+            startCol: colLabelToIndex(s),
+            endCol: colLabelToIndex(s),
+          };
+        }
+        const p = parseA1(s);
+        if (p) return { type: "cell", cell: p };
+        return null;
+      }
+
+      // Handsontable-backed cell value getter
+      function getGridValue(r, c) {
+        if (!hot) return null;
+        if (r < 0 || c < 0) return null;
+        const v = hot.getDataAtCell(r, c);
+        if (v === undefined || v === null || v === "") return null;
+        return v;
+      }
+
+      // collect numeric values inside a range spec (columns or cell-range)
+      function collectNumericValuesFromSpec(spec) {
+        const res = [];
+        if (!spec || !hot) return res;
+        const rowCount = hot.countRows();
+        if (spec.type === "col") {
+          const c = spec.startCol;
+          for (let r = 0; r < rowCount; r++) {
+            const raw = getGridValue(r, c);
+            const n = parseFloat(String(raw).replace(/,/g, ""));
+            if (!isNaN(n)) res.push(n);
+          }
+        } else if (spec.type === "range") {
+          const sr = Math.min(spec.start.row, spec.end.row);
+          const er = Math.max(spec.start.row, spec.end.row);
+          const sc = Math.min(spec.start.col, spec.end.col);
+          const ec = Math.max(spec.start.col, spec.end.col);
+          for (let r = sr; r <= er; r++) {
+            for (let c = sc; c <= ec; c++) {
+              const raw = getGridValue(r, c);
+              const n = parseFloat(String(raw).replace(/,/g, ""));
+              if (!isNaN(n)) res.push(n);
+            }
+          }
+        } else if (spec.type === "cell") {
+          const raw = getGridValue(spec.cell.row, spec.cell.col);
+          const n = parseFloat(String(raw).replace(/,/g, ""));
+          if (!isNaN(n)) res.push(n);
+        }
+        return res;
+      }
+
+      // collect textual values for categorical charts
+      function collectTextCountsFromSpec(spec) {
+        const counts = {};
+        if (!spec || !hot) return counts;
+        const rowCount = hot.countRows();
+        if (spec.type === "col") {
+          const c = spec.startCol;
+          for (let r = 0; r < rowCount; r++) {
+            const raw = getGridValue(r, c);
+            if (raw === null) continue;
+            const s = String(raw).trim();
+            if (s === "") continue;
+            counts[s] = (counts[s] || 0) + 1;
+          }
+        } else if (spec.type === "range") {
+          const sr = Math.min(spec.start.row, spec.end.row);
+          const er = Math.max(spec.start.row, spec.end.row);
+          const sc = Math.min(spec.start.col, spec.end.col);
+          const ec = Math.max(spec.start.col, spec.end.col);
+          for (let r = sr; r <= er; r++) {
+            for (let c = sc; c <= ec; c++) {
+              const raw = getGridValue(r, c);
+              if (raw === null) continue;
+              const s = String(raw).trim();
+              if (s === "") continue;
+              counts[s] = (counts[s] || 0) + 1;
+            }
+          }
+        }
+        return counts;
+      }
+
+      // ---------- Visualization ----------
+      function clearVisualization() {
+        if (!vizCanvas) return;
+        const ctx = vizCanvas.getContext("2d");
+        ctx.clearRect(0, 0, vizCanvas.width, vizCanvas.height);
+        vizMeta.textContent = "";
+      }
+
+      function randomColor(i) {
+        const hue = (i * 47) % 360;
+        return `hsl(${hue},70%,60%)`;
+      }
+
+      const ChartEngine = {
+        pad: 30,
+
+        setup(ctx) {
+          const rect = vizCanvas.getBoundingClientRect();
+          vizCanvas.width = rect.width || 320;
+          vizCanvas.height = rect.height || 200;
+          ctx.clearRect(0, 0, vizCanvas.width, vizCanvas.height);
+        },
+
+        // random pastel color
+        color(i) {
+          const hue = (i * 47) % 360;
+          return `hsl(${hue}, 70%, 60%)`;
+        },
+
+        // Draw axis frame
+        axes(ctx, max, min) {
+          const w = vizCanvas.width;
+          const h = vizCanvas.height;
+          const pad = this.pad;
+
+          ctx.strokeStyle = "#aaa";
+          ctx.lineWidth = 1;
+
+          // Y-axis
+          ctx.beginPath();
+          ctx.moveTo(pad, pad);
+          ctx.lineTo(pad, h - pad);
+          ctx.stroke();
+
+          // X-axis
+          ctx.beginPath();
+          ctx.moveTo(pad, h - pad);
+          ctx.lineTo(w - pad, h - pad);
+          ctx.stroke();
+
+          // Y ticks
+          ctx.fillStyle = "white";
+          ctx.font = "10px sans-serif";
+
+          const ticks = 5;
+          for (let i = 0; i <= ticks; i++) {
+            const t = min + ((max - min) * i) / ticks;
+            const y = h - pad - ((t - min) / (max - min)) * (h - pad * 2);
+
+            ctx.fillText(t.toFixed(0), 5, y + 3);
+
+            ctx.strokeStyle = "#444";
+            ctx.beginPath();
+            ctx.moveTo(pad, y);
+            ctx.lineTo(w - pad, y);
+            ctx.stroke();
+          }
+        },
+
+        // ------ CHART TYPES ------
+        pie(ctx, labels, values) {
+          const total = values.reduce((a, b) => a + b, 0);
+
+          const cx = vizCanvas.width / 2;
+          const cy = vizCanvas.height / 2;
+          const radius = Math.min(cx, cy) - 10;
+
+          let start = 0;
+
+          for (let i = 0; i < values.length; i++) {
+            const slice = (values[i] / total) * Math.PI * 2;
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius, start, start + slice);
+            ctx.closePath();
+            ctx.fillStyle = this.color(i);
+            ctx.fill();
+
+            // label
+            const mid = start + slice / 2;
+            const lx = cx + Math.cos(mid) * (radius * 0.6);
+            const ly = cy + Math.sin(mid) * (radius * 0.6);
+            ctx.fillStyle = "white";
+            ctx.font = "11px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(labels[i], lx, ly);
+
+            start += slice;
+          }
+        },
+
+        bar(ctx, labels, values) {
+          const w = vizCanvas.width;
+          const h = vizCanvas.height;
+          const pad = this.pad;
+          const max = Math.max(...values);
+
+          this.axes(ctx, max, 0);
+
+          const barArea = w - pad * 2;
+          const barW = barArea / labels.length - 10;
+
+          labels.forEach((label, i) => {
+            const x = pad + i * (barW + 10);
+            const bh = (values[i] / max) * (h - pad * 2);
+            const y = h - pad - bh;
+
+            ctx.fillStyle = this.color(i);
+            ctx.fillRect(x, y, barW, bh);
+
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+            ctx.font = "10px sans-serif";
+            ctx.fillText(label, x + barW / 2, h - pad + 12);
+          });
+        },
+
+        line(ctx, nums) {
+          if (nums.length < 2) return;
+
+          const w = vizCanvas.width;
+          const h = vizCanvas.height;
+          const pad = this.pad;
+
+          const max = Math.max(...nums);
+          const min = Math.min(...nums);
+
+          this.axes(ctx, max, min);
+
+          ctx.beginPath();
+          ctx.strokeStyle = "white";
+          ctx.lineWidth = 2;
+
+          nums.forEach((v, i) => {
+            const x = pad + (i / (nums.length - 1)) * (w - pad * 2);
+            const y = h - pad - ((v - min) / (max - min)) * (h - pad * 2);
+
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+
+          ctx.stroke();
+        },
+
+        scatter(ctx, nums) {
+          const w = vizCanvas.width;
+          const h = vizCanvas.height;
+          const pad = this.pad;
+
+          const max = Math.max(...nums);
+          const min = Math.min(...nums);
+
+          this.axes(ctx, max, min);
+
+          nums.forEach((v, i) => {
+            const x = pad + (i / (nums.length - 1)) * (w - pad * 2);
+            const y = h - pad - ((v - min) / (max - min)) * (h - pad * 2);
+
+            ctx.beginPath();
+            ctx.fillStyle = "white";
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        },
+
+        histogram(ctx, nums) {
+          const bins = 10;
+          const min = Math.min(...nums);
+          const max = Math.max(...nums);
+          const step = (max - min) / bins;
+
+          const counts = Array(bins).fill(0);
+          nums.forEach((n) => {
+            const idx = Math.min(Math.floor((n - min) / step), bins - 1);
+            counts[idx]++;
+          });
+
+          const labels = counts.map(
+            (_, i) =>
+              `${(min + i * step).toFixed(0)}-${(min + (i + 1) * step).toFixed(
+                0
+              )}`
+          );
+
+          this.bar(ctx, labels, counts);
+        },
+
+        draw(type, nums, counts) {
+          const ctx = vizCanvas.getContext("2d");
+          this.setup(ctx);
+
+          const labels = Object.keys(counts);
+          const values = labels.map((k) => counts[k]);
+
+          switch (type) {
+            case "pie":
+              this.pie(
+                ctx,
+                labels.length ? labels : nums.map(String),
+                labels.length ? values : nums
+              );
+              break;
+            case "bar":
+              this.bar(
+                ctx,
+                labels.length ? labels : nums.map(String),
+                labels.length ? values : nums
+              );
+              break;
+            case "line":
+              this.line(ctx, nums);
+              break;
+            case "scatter":
+              this.scatter(ctx, nums);
+              break;
+            case "hist":
+              this.histogram(ctx, nums);
+              break;
+            default:
+              break;
+          }
+        },
+      };
+
+      function updateVisualization() {
+        if (!vizCanvas || !activeSelection || !hot) return;
+
+        const spec = (() => {
+          if (!activeSelection) return null;
+
+          if (activeSelection.type === "column-range") {
+            const [a, b] = activeSelection.target.split(":");
+            return parseRangeSpec(a + ":" + b);
+          }
+
+          if (activeSelection.type === "cell-range") {
+            return parseRangeSpec(activeSelection.target);
+          }
+
+          if (activeSelection.type === "cell") {
+            const p = parseA1(activeSelection.target);
+            if (p) return { type: "col", startCol: p.col, endCol: p.col };
+          }
+
+          if (activeSelection.type === "row-range") {
+            return parseRangeSpec(activeSelection.target);
+          }
+
+          return null;
+        })();
+
+        if (!spec) {
+          vizMeta.textContent = "No selection to visualize.";
+          return;
+        }
+
+        const nums = collectNumericValuesFromSpec(spec);
+        const counts = collectTextCountsFromSpec(spec);
+
+        if (selectedVizType !== "auto") {
+          ChartEngine.draw(selectedVizType, nums, counts);
+          vizMeta.textContent = `Chart: ${selectedVizType}`;
+          return;
+        }
+
+        // AUTO MODE
+        const labels = Object.keys(counts);
+
+        if (labels.length > 0) {
+          if (labels.length <= 8) {
+            ChartEngine.draw("pie", nums, counts);
+          } else {
+            ChartEngine.draw("bar", nums, counts);
+          }
+          return;
+        }
+
+        if (nums.length > 1) {
+          ChartEngine.draw("line", nums, counts);
+          return;
+        }
+
+        vizMeta.textContent = "No numeric or categorical values found.";
+      }
+
+      // ---------- Handsontable init ----------
+      function initHot() {
+        const hotElement = document.getElementById("hot");
+        hot = new Handsontable(hotElement, {
+          data: Handsontable.helper.createEmptySpreadsheetData(50, 20),
+          rowHeaders: true,
+          colHeaders: true,
+          formulas: {
+            engine: hfInstance,
+          },
+          licenseKey: "non-commercial-and-evaluation",
+          height: 520,
+          width: "100%",
+          manualColumnResize: true,
+          manualRowResize: true,
+          dropdownMenu: true,
+          contextMenu: true,
+          filters: true,
+          columnSorting: true,
+          beforeOnCellMouseDown: onBeforeCellMouseDown,
+          afterSelectionEnd: onSelectionEnd,
+        });
+      }
+
+      function onBeforeCellMouseDown(event, coords) {
+        // coords.type: 'cell', 'rowHeader', 'colHeader', 'corner'
+        selectionKind = coords.type;
+      }
+
+      function onSelectionEnd(row, col, row2, col2) {
+        if (!hot) return;
+        if (row == null || col == null) return;
+
+        const r1 = Math.min(row, row2);
+        const r2 = Math.max(row, row2);
+        const c1 = Math.min(col, col2);
+        const c2 = Math.max(col, col2);
+
+        // Column header click → B:B style
+        if (selectionKind === "colHeader") {
+          const colIndex = col;
+          const label = colToLabel(colIndex);
+          const ref = `${label}:${label}`;
+          activeSelection = { type: "column-range", target: ref };
+          targetCellInput.value = ref;
+          selectionMeta.textContent = "Active: Column " + ref;
+          updateVisualization();
+          return;
+        }
+
+        // Row header click → 5:5 style
+        if (selectionKind === "rowHeader") {
+          const rowIndex = row;
+          const ref = `${rowIndex + 1}:${rowIndex + 1}`;
+          activeSelection = { type: "row-range", target: ref };
+          targetCellInput.value = ref;
+          selectionMeta.textContent = "Active: Row " + (rowIndex + 1);
+          clearVisualization();
+          return;
+        }
+
+        // In-grid selections
+        if (r1 === r2 && c1 === c2 && r1 >= 0 && c1 >= 0) {
+          const addr = toA1(r1, c1);
+          activeSelection = { type: "cell", target: addr };
+          targetCellInput.value = addr;
+          selectionMeta.textContent = "Active cell: " + addr;
+          clearVisualization();
+        } else {
+          const startRef = toA1(r1, c1);
+          const endRef = toA1(r2, c2);
+          const ref = `${startRef}:${endRef}`;
+          activeSelection = { type: "cell-range", target: ref };
+          targetCellInput.value = ref;
+          selectionMeta.textContent = "Active: Range " + ref;
+          updateVisualization();
+        }
+      }
+
+      // ---------- SheetJS helpers ----------
+      function sheetToAoA(sheet) {
+        if (!sheet || !sheet["!ref"]) {
+          return Handsontable.helper.createEmptySpreadsheetData(50, 20);
+        }
+        const range = XLSX.utils.decode_range(sheet["!ref"]);
+        const rows = [];
+        for (let r = range.s.r; r <= range.e.r; r++) {
+          const rowArr = [];
+          for (let c = range.s.c; c <= range.e.c; c++) {
+            const addr = XLSX.utils.encode_cell({ r, c });
+            const cell = sheet[addr];
+            if (cell) {
+              if (cell.f) {
+                rowArr[c - range.s.c] = "=" + cell.f; // formula as string
+              } else if (cell.v != null) {
+                rowArr[c - range.s.c] = cell.v;
+              } else {
+                rowArr[c - range.s.c] = "";
+              }
+            } else {
+              rowArr[c - range.s.c] = "";
+            }
+          }
+          rows.push(rowArr);
+        }
+        return rows;
+      }
+
+      function loadSheetToGrid(sheet) {
+        if (!hot) return;
+
+        const aoa = sheetToAoA(sheet);
+
+        // ----- extra columns -----
+        const EXTRA_COLS = 20;
+        const maxCols = Math.max(...aoa.map((row) => row.length));
+        const targetCols = maxCols + EXTRA_COLS;
+
+        for (let r = 0; r < aoa.length; r++) {
+          while (aoa[r].length < targetCols) {
+            aoa[r].push("");
+          }
+        }
+
+        // ---------- HyperFormula: Create/Register Sheet ----------
+        let sheetId = hfInstance.getSheetId(currentSheetName);
+        if (sheetId == null) {
+          sheetId = hfInstance.addSheet(currentSheetName);
+        }
+
+        // Load content into HF (IMPORTANT: before Handsontable load)
+        hfInstance.setSheetContent(sheetId, aoa);
+
+        // ---------- Load into Handsontable ----------
+        hot.updateSettings({
+          data: aoa,
+          formulas: {
+            engine: hfInstance,
+            sheetName: currentSheetName, // 🔥 REQUIRED !!
+          },
+        });
+
+        clearVisualization();
+        document.getElementById("grid-container").classList.add("sheet-fade");
+        setTimeout(
+          () =>
+            document
+              .getElementById("grid-container")
+              .classList.remove("sheet-fade"),
+          250
+        );
+      }
+
+      function syncGridToSheet() {
+        if (!workbook || !currentSheetName || !hot) return;
+        const aoa = hot.getData();
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        workbook.Sheets[currentSheetName] = ws;
+      }
+
+      function renderSheetTabs() {
+        sheetTabs.innerHTML = "";
+        if (!workbook) return;
+        workbook.SheetNames.forEach((name) => {
+          const btn = document.createElement("button");
+          const active = name === currentSheetName;
+          btn.textContent = name;
+          btn.className = `px-2 py-1 rounded-full text-[11px] ${
+            active
+              ? "border-emerald-500/70 bg-emerald-500/10 text-emerald-200"
+              : "border-slate-700 bg-slate-900/80 text-slate-300 hover:border-emerald-500/60 hover:text-emerald-200"
+          }`;
+          btn.addEventListener("click", () => {
+            if (name === currentSheetName) return;
+            if (workbook && currentSheetName) syncGridToSheet();
+            currentSheetName = name;
+            const ws = workbook.Sheets[currentSheetName];
+            sheetMeta.textContent = `Sheet: ${currentSheetName}`;
+            loadSheetToGrid(ws);
+            selectionMeta.textContent = "Active cell: –";
+            activeSelection = null;
+          });
+          sheetTabs.appendChild(btn);
+        });
+      }
+
+      // ---------- Simple AI + heuristics ----------
+      function detectColumnLabelFromPrompt(prompt) {
+        if (!prompt) return null;
+        const m =
+          prompt.match(/\bcolumn\s+([A-Z]{1,3})\b/i) ||
+          prompt.match(/\bcol(?:umn)?\s+([A-Z]{1,3})\b/i) ||
+          prompt.match(/\b([A-Z]{1,3})\s+column\b/i);
+        if (m) return m[1].toUpperCase();
+        return null;
+      }
+
+      async function callGemini(prompt, context) {
+        const systemPrompt = `
+You are an Excel Formula Generator for HyperFormula.
+
+Return ONLY valid JSON. Never return explanations. Never return markdown.
+Format MUST be EXACTLY:
+
+{
+  "type": "formula",
+  "formula": "=EXCEL_FORMULA",
+  "target": "A1"
+}
+
+Rules:
+- Always output valid JSON. No text before or after JSON.
+- NEVER output backticks or markdown.
+- Use ONLY HyperFormula compatible formulas (SUM, SUMIF, SUMIFS, AVERAGE, COUNTIFS, FILTER, etc.).
+- When the user mentions column names, use the provided headerMap to convert names → letters.
+- If no header matches, return an error JSON:
+  { "type": "error", "message": "Unknown column" }
+`;
+
+        const body = {
+  messages: [
+    { role: "user", content: prompt }
+  ]
+};
+
+
+        // 🚫 NO Authorization header here
+        const resp = await fetch("http://localhost:3000/nl2excel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        const data = await resp.json();
+      return {
+  type: "formula",
+  formula: data?.choices?.[0]?.message?.content || null
+};
+
+      }
+
+      // ---------- AI actions ----------
+      async function testGeminiFrontend() {
+        try {
+          const resp = await fetch("http://localhost:3000/test-gemini");
+          const data = await resp.json();
+
+          console.log("Frontend Gemini Test Response:", data);
+
+          alert("Gemini test result:\n" + JSON.stringify(data, null, 2));
+        } catch (err) {
+          alert("Error calling Gemini:\n" + err.message);
+        }
+      }
+
+      async function handleRunAi() {
+        const prompt = promptInput.value.trim();
+        const targetRaw = targetCellInput.value.trim();
+        if (!prompt) {
+          setStatus("Enter a natural language instruction first.", "warn");
+          return;
+        }
+        if (!targetRaw) {
+          setStatus("Select a target first (e.g. J2 or C:C).", "warn");
+          return;
+        }
+
+        const target = targetRaw.toUpperCase();
+        let selectionType = "cell",
+          context = {};
+        const cellParsed = parseA1(target);
+        if (cellParsed) {
+          selectionType = "cell";
+          context = {
+            activeCellRow: cellParsed.row,
+            activeCellCol: cellParsed.col,
+            activeCellColLabel: colToLabel(cellParsed.col),
+            targetNotation: target,
+          };
+        } else if (/^[A-Z]+:[A-Z]+$/.test(target)) {
+          selectionType = "column-range";
+          const [startCol, endCol] = target.split(":");
+          context = { selectionType, startCol, endCol, targetNotation: target };
+        } else if (/^\d+:\d+$/.test(target)) {
+          selectionType = "row-range";
+          context = { selectionType, targetNotation: target };
+        } else if (/^[A-Z]+\d+:[A-Z]+\d+$/.test(target)) {
+          selectionType = "cell-range";
+          context = { selectionType, targetNotation: target };
+        } else {
+          setStatus("Target selection not recognized.", "error");
+          return;
+        }
+
+        const describedCol = detectColumnLabelFromPrompt(prompt);
+        if (describedCol) context.describedColumn = describedCol;
+
+        runAiBtn.disabled = true;
+        setStatus("Generating formula…", "info");
+        try {
+          const headerMap = getColumnHeaderMap();
+          context.headerMap = headerMap;
+
+          const ai = await callGemini(prompt, context);
+
+          if (!ai) {
+            setStatus("AI returned nothing.", "warn");
+            formulaOutput.textContent = "–";
+            copyFormulaBtn.disabled = true;
+            return;
+          }
+          if (ai.type === "formula") {
+            formulaOutput.textContent = ai.formula || "–";
+            copyFormulaBtn.disabled = !ai.formula;
+            autoApplyFormulaToSelection(target, selectionType, ai.formula);
+            setStatus(
+              "Formula applied (HyperFormula evaluates it).",
+              "success"
+            );
+          } else if (ai.type === "operation") {
+            if (ai.op === "sort-column") {
+              applyColumnSort(ai.column, ai.direction);
+              formulaOutput.textContent = `Operation: sort ${ai.column} (${ai.direction})`;
+              copyFormulaBtn.disabled = true;
+              setStatus(
+                `Column ${ai.column} sorted ${ai.direction}.`,
+                "success"
+              );
+            } else {
+              formulaOutput.textContent = `Operation: ${ai.op || "unknown"}`;
+              setStatus("Unsupported operation from AI.", "warn");
+            }
+          }
+        } catch (e) {
+          console.error(e);
+          setStatus("Failed to generate formula.", "error");
+        } finally {
+          runAiBtn.disabled = false;
+        }
+      }
+
+      // Apply formula through Handsontable
+      function autoApplyFormulaToSelection(target, selectionType, formula) {
+        if (!hot) return;
+        const f = formula.startsWith("=") ? formula : "=" + formula;
+
+        if (selectionType === "cell") {
+          const parsed = parseA1(target);
+          if (!parsed) return;
+          hot.setDataAtCell(parsed.row, parsed.col, f);
+        } else if (selectionType === "column-range") {
+          const [a, b] = target.split(":");
+          const start = colLabelToIndex(a),
+            end = colLabelToIndex(b);
+          const rowCount = hot.countRows();
+          for (let c = start; c <= end; c++) {
+            for (let r = 0; r < rowCount; r++) {
+              hot.setDataAtCell(r, c, f);
+            }
+          }
+        } else if (selectionType === "row-range") {
+          const [s, e] = target.split(":");
+          const sr = Math.min(parseInt(s, 10) - 1, parseInt(e, 10) - 1);
+          const er = Math.max(parseInt(s, 10) - 1, parseInt(e, 10) - 1);
+          const colCount = hot.countCols();
+          for (let r = sr; r <= er; r++) {
+            for (let c = 0; c < colCount; c++) {
+              hot.setDataAtCell(r, c, f);
+            }
+          }
+        } else if (selectionType === "cell-range") {
+          const [startRef, endRef] = target.split(":");
+          const s = parseA1(startRef),
+            e = parseA1(endRef);
+          if (!s || !e) return;
+          const sr = Math.min(s.row, e.row),
+            er = Math.max(s.row, e.row);
+          const sc = Math.min(s.col, e.col),
+            ec = Math.max(s.col, e.col);
+          for (let r = sr; r <= er; r++) {
+            for (let c = sc; c <= ec; c++) {
+              hot.setDataAtCell(r, c, f);
+            }
+          }
+        }
+
+        updateVisualization();
+      }
+      function getColumnHeaderMap() {
+  if (!hot) return {};
+
+  const firstRow = hot.getDataAtRow(0); // REAL HEADERS
+  const map = {};
+
+  firstRow.forEach((name, index) => {
+    if (!name) return;
+    map[String(name).trim()] = colToLabel(index);
+  });
+
+  return map;
+}
+
+
+      function applyColumnSort(columnLabel, direction = "desc") {
+        if (!hot) return;
+        const colIndex = colLabelToIndex(columnLabel);
+        const plugin = hot.getPlugin("columnSorting");
+        plugin.sort({
+          column: colIndex,
+          sortOrder: direction === "asc" ? "asc" : "desc",
+        });
+      }
+
+      function summarizeWorkbook(workbook, fileName) {
+        const result = {
+          fileName,
+          totalSheets: workbook.SheetNames.length,
+          totalRows: 0,
+          totalCols: 0,
+          emptyRows: 0,
+          emptyCols: 0,
+          sheets: [],
+          columns: {},
+        };
+
+        const allColumns = {}; // For column-level profiling
+
+        workbook.SheetNames.forEach((sheetName) => {
+          const sheet = workbook.Sheets[sheetName];
+          const aoa = XLSX.utils.sheet_to_json(sheet, {
+            header: 1,
+            raw: false,
+          });
+
+          const rows = aoa.length;
+          const cols = aoa[0] ? aoa[0].length : 0;
+
+          result.totalRows += rows;
+          result.totalCols = Math.max(result.totalCols, cols);
+
+          // Count empty rows
+          aoa.forEach((row) => {
+            const isEmpty = row.every((v) => v === "" || v == null);
+            if (isEmpty) result.emptyRows++;
+          });
+
+          // Count empty columns
+          for (let c = 0; c < cols; c++) {
+            let empty = true;
+            for (let r = 0; r < rows; r++) {
+              const v = aoa[r][c];
+              if (v !== "" && v != null) {
+                empty = false;
+                break;
+              }
+            }
+            if (empty) result.emptyCols++;
+          }
+
+          // Sheet-level summary
+          result.sheets.push({
+            name: sheetName,
+            rows,
+            cols,
+            headers: aoa[0] ? aoa[0].map((h) => h || "(blank)") : [],
+          });
+
+          // COLUMN PROFILING
+          const headers = aoa[0] || [];
+          for (let c = 0; c < cols; c++) {
+            const colName = headers[c] || `Column ${c + 1}`;
+            if (!allColumns[colName]) {
+              allColumns[colName] = {
+                values: [],
+              };
+            }
+
+            for (let r = 1; r < rows; r++) {
+              allColumns[colName].values.push(aoa[r][c]);
+            }
+          }
+        });
+
+        // Now generate stats for each column
+        for (const [colName, col] of Object.entries(allColumns)) {
+          const rawVals = col.values.filter((v) => v !== "" && v != null);
+
+          let numericVals = rawVals
+            .map((v) => parseFloat(v))
+            .filter((v) => !isNaN(v));
+
+          let dateVals = rawVals
+            .map((v) => new Date(v))
+            .filter((d) => d.toString() !== "Invalid Date");
+
+          // Decide column type
+          let type = "categorical";
+          if (numericVals.length === rawVals.length && rawVals.length > 0) {
+            type = "numeric";
+          } else if (dateVals.length === rawVals.length && rawVals.length > 0) {
+            type = "date";
+          }
+
+          const obj = {
+            type,
+            missing: col.values.length - rawVals.length,
+            uniqueCount: new Set(rawVals).size,
+            chartData: {},
+          };
+
+          if (type === "numeric") {
+            numericVals.sort((a, b) => a - b);
+
+            const mean =
+              numericVals.reduce((a, b) => a + b, 0) / numericVals.length;
+            const median = numericVals[Math.floor(numericVals.length / 2)];
+            const variance =
+              numericVals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) /
+              numericVals.length;
+            const std = Math.sqrt(variance);
+
+            obj.numericStats = {
+              min: numericVals[0],
+              max: numericVals[numericVals.length - 1],
+              mean,
+              median,
+              std,
+            };
+
+            obj.chartData.histogram = numericVals;
+          }
+
+          if (type === "categorical") {
+            const counts = {};
+            rawVals.forEach((v) => {
+              counts[v] = (counts[v] || 0) + 1;
+            });
+
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+            obj.categoryStats = sorted;
+            obj.chartData.categories = counts;
+          }
+
+          if (type === "date") {
+            dateVals.sort((a, b) => a - b);
+
+            obj.dateStats = {
+              earliest: dateVals[0],
+              latest: dateVals[dateVals.length - 1],
+            };
+
+            // Group by day
+            const counts = {};
+            dateVals.forEach((d) => {
+              const key = d.toISOString().split("T")[0];
+              counts[key] = (counts[key] || 0) + 1;
+            });
+
+            obj.chartData.timeSeries = counts;
+          }
+
+          result.columns[colName] = obj;
+        }
+
+        // Save to storage using the name summary.html expects
+        localStorage.setItem("excelSummaryDetailed", JSON.stringify(result));
+
+        window.location.href = "summary.html";
+      }
+
+      // ---------- File handling ----------
+      fileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+
+        reader.onload = (evt) => {
+          const data = evt.target.result;
+          const name = file.name.toLowerCase();
+
+          const insertingIntoExistingSheet =
+            workbook &&
+            currentSheetName &&
+            workbook.SheetNames.includes(currentSheetName);
+
+          let parsed;
+          if (name.endsWith(".csv")) {
+            const text =
+              typeof data === "string" ? data : new TextDecoder().decode(data);
+            parsed = XLSX.read(text, { type: "string" });
+          } else {
+            parsed = XLSX.read(data, { type: "array" });
+          }
+
+          const uploadedSheetName = parsed.SheetNames[0];
+          const uploadedSheet = parsed.Sheets[uploadedSheetName];
+
+          if (insertingIntoExistingSheet) {
+            workbook.Sheets[currentSheetName] = uploadedSheet;
+            if (!workbook.SheetNames.includes(currentSheetName)) {
+              workbook.SheetNames.push(currentSheetName);
+            }
+          } else {
+            workbook = parsed;
+            currentSheetName = uploadedSheetName;
+          }
+
+          fileMeta.textContent = `Loaded: ${file.name}`;
+          sheetMeta.textContent = `Sheet: ${currentSheetName}`;
+          addSheetBtn.disabled = false;
+          downloadBtn.disabled = false;
+          summaryBtn.disabled = false;
+
+          loadSheetToGrid(workbook.Sheets[currentSheetName]);
+          renderSheetTabs();
+          setStatus("Sheet loaded.", "success");
+        };
+
+        if (file.name.toLowerCase().endsWith(".csv")) reader.readAsText(file);
+        else reader.readAsArrayBuffer(file);
+      });
+
+      addSheetBtn.addEventListener("click", () => {
+        if (!workbook) {
+          setStatus("Upload a workbook first.", "warn");
+          return;
+        }
+
+        let index = workbook.SheetNames.length + 1;
+        let base = "Sheet";
+        let newName = base + index;
+        while (workbook.SheetNames.includes(newName)) {
+          index++;
+          newName = base + index;
+        }
+
+        let ws = XLSX.utils.aoa_to_sheet([[]]);
+        XLSX.utils.book_append_sheet(workbook, ws, newName);
+
+        if (currentSheetName) syncGridToSheet();
+        currentSheetName = newName;
+        loadSheetToGrid(ws);
+        renderSheetTabs();
+        setStatus(`New sheet ${newName} added.`, "success");
+      });
+
+      downloadBtn.addEventListener("click", () => {
+        if (!hot) return;
+        if (workbook && currentSheetName) syncGridToSheet();
+
+        const wb = workbook || XLSX.utils.book_new();
+        if (!workbook) {
+          const aoa = hot.getData();
+          const ws = XLSX.utils.aoa_to_sheet(aoa);
+          XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+        }
+
+        const now = new Date();
+        const stamp = now.toISOString().replace(/[:.]/g, "-");
+        const filename =
+          fileMeta.textContent && fileMeta.textContent.startsWith("Loaded: ")
+            ? fileMeta.textContent.replace("Loaded: ", "").split(".")[0] +
+              `-updated-${stamp}.xlsx`
+            : `nl2excel-updated-${stamp}.xlsx`;
+
+        XLSX.writeFile(wb, filename);
+        setStatus("Workbook downloaded (values only).", "success");
+      });
+
+      // ---------- target input handling ----------
+      targetCellInput.addEventListener("blur", () => {
+        const ref = targetCellInput.value.trim().toUpperCase();
+        if (parseA1(ref)) {
+          activeSelection = { type: "cell", target: ref };
+          selectionMeta.textContent = "Active cell: " + ref;
+          clearVisualization();
+        } else if (/^[A-Z]+:[A-Z]+$/.test(ref)) {
+          activeSelection = { type: "column-range", target: ref };
+          selectionMeta.textContent = "Active: Columns " + ref;
+          updateVisualization();
+        } else if (/^[A-Z]+\d+:[A-Z]+\d+$/.test(ref)) {
+          activeSelection = { type: "cell-range", target: ref };
+          selectionMeta.textContent = "Active: Range " + ref;
+          updateVisualization();
+        } else if (/^\d+:\d+$/.test(ref)) {
+          activeSelection = { type: "row-range", target: ref };
+          selectionMeta.textContent = "Active: Rows " + ref;
+          clearVisualization();
+        } else {
+          activeSelection = null;
+          clearVisualization();
+        }
+      });
+
+      // ---------- AI buttons ----------
+      runAiBtn.addEventListener("click", handleRunAi);
+      insertFormulaBtn.addEventListener("click", () => {
+        const formula = formulaOutput.textContent.trim();
+        const target = targetCellInput.value.trim();
+        if (!formula || formula === "–") {
+          setStatus("No formula to apply.", "warn");
+          return;
+        }
+        const t = target.toUpperCase();
+        let type = "cell";
+        if (/^[A-Z]+:[A-Z]+$/.test(t)) type = "column-range";
+        else if (/^[A-Z]+\d+:[A-Z]+\d+$/.test(t)) type = "cell-range";
+        else if (/^\d+:\d+$/.test(t)) type = "row-range";
+        autoApplyFormulaToSelection(t, type, formula);
+        setStatus("Formula applied in grid.", "success");
+      });
+
+      copyFormulaBtn.addEventListener("click", () => {
+        const f = formulaOutput.textContent.trim();
+        if (!f || f === "–") return;
+        navigator.clipboard
+          .writeText(f)
+          .then(() => setStatus("Formula copied to clipboard.", "success"))
+          .catch(() => setStatus("Copy failed.", "error"));
+      });
+
+      // ---------- Init ----------
+      initHot();
+      document.querySelectorAll(".viz-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectedVizType = btn.dataset.type;
+          updateVisualization(); // redraw chart
+        });
+      });
+      const summaryBtn = document.getElementById("summary-btn");
+
+      summaryBtn.addEventListener("click", () => {
+        if (!workbook) {
+          setStatus("Upload a workbook first.", "warn");
+          return;
+        }
+        summarizeWorkbook(
+          workbook,
+          fileMeta.textContent.replace("Loaded: ", "")
+        );
+      });
+
+      setStatus("Ready.");
+
+      // Debug handle
+      window._NL2Excel = { hot, hfInstance };
+    </script>
+  </body>
+</html>
